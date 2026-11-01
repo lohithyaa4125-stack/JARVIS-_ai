@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#061426">
+  <meta name="description" content="Your personal JARVIS-style voice assistant">
+  <title>JARVIS AI</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="stars"></div>
+  <main class="app">
+    <header>
+      <div class="brand"><span class="brand-mark">J</span><div><h1>J.A.R.V.I.S</h1><p>PERSONAL ASSISTANT</p></div></div>
+      <span class="status"><i></i> SYSTEM READY</span>
+    </header>
+
+    <section class="core-area">
+      <div class="core" aria-label="JARVIS visualizer">
+        <div class="ring ring-one"></div><div class="ring ring-two"></div>
+        <div class="ring ring-three"></div>
+        <div class="core-center"><span>J</span><small>ONLINE</small></div>
+      </div>
+      <p class="listening" id="state">READY WHEN YOU ARE</p>
+    </section>
+
+    <section class="chat" aria-live="polite" id="chat">
+      <div class="message bot"><b>JARVIS</b><p>Hello! I am ready. Tap the microphone or type a message.</p></div>
+    </section>
+
+    <section class="controls">
+      <div class="input-row">
+        <input id="prompt" type="text" placeholder="Ask JARVIS something..." autocomplete="off">
+        <button id="send" class="send" aria-label="Send message">➤</button>
+      </div>
+      <div class="action-row">
+        <button id="mic" class="mic">🎙️ <span>Speak</span></button>
+        <button id="voice" class="secondary">🔊 Voice: ON</button>
+        <button id="clear" class="secondary">Clear chat</button>
+      </div>
+      <p class="hint">Voice recognition works best in Chrome. Internet is needed for web search.</p>
+    </section>
+
+    <footer>JARVIS AI <span>•</span> PERSONAL PROJECT <span>•</span> V1.0</footer>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
