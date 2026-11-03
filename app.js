@@ -31,7 +31,7 @@ function speak(text) {
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = "en-IN";
   utterance.rate = 0.92;
-  utterance.pitch = 0.85;
+  utterance.pitch = 0.65;
 
   const voices = window.speechSynthesis.getVoices();
   const maleVoice = voices.find(v =>
