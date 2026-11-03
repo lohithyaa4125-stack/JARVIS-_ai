@@ -3,87 +3,214 @@ const promptInput = document.getElementById("prompt");
 const stateLabel = document.getElementById("state");
 const micButton = document.getElementById("mic");
 const voiceButton = document.getElementById("voice");
+
 let voiceOn = true;
 let recognition = null;
 
 function addMessage(who, text) {
   const item = document.createElement("div");
   item.className = "message " + (who === "YOU" ? "user" : "bot");
+
   const name = document.createElement("b");
   name.textContent = who;
+
   const body = document.createElement("p");
   body.textContent = text;
-  item.append(name, body);
+
+  item.appendChild(name);
+  item.appendChild(body);
   chat.appendChild(item);
   chat.scrollTop = chat.scrollHeight;
 }
+
 function speak(text) {
   if (!voiceOn || !("speechSynthesis" in window)) return;
+
   window.speechSynthesis.cancel();
+
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = "en-IN";
-  utterance.rate = 0.95;
+  utterance.rate = 0.92;
+  utterance.pitch = 0.85;
+
   const voices = window.speechSynthesis.getVoices();
-  const maleLike = voices.find(v => /male|david|mark|daniel/i.test(v.name));
-  if (maleLike) utterance.voice = maleLike;
+  const maleVoice = voices.find(v =>
+    /male|david|daniel|alex|aaron|fred|guy/i.test(v.name)
+  );
+
+  if (maleVoice) {
+    utterance.voice = maleVoice;
+  }
+
   window.speechSynthesis.speak(utterance);
 }
-function localReply(raw) {
-  const q = raw.toLowerCase().trim();
-  if (/^(hi|hello|hey)\b/.test(q)) return "Hello! How can I help you today?";
-  if (q.includes("your name") || q.includes("who are you")) return "I am JARVIS, your personal assistant prototype.";
-  if (q.includes("time")) return "The time on your device is " + new Date().toLocaleTimeString();
-  if (q.includes("date") || q.includes("today")) return "Today's date is " + new Date().toLocaleDateString();
-  if (q.includes("thank")) return "You're welcome. Always happy to help.";
-  if (q.includes("tamil")) return "வணக்கம்! நான் JARVIS. உங்களுக்கு எப்படி உதவ வேண்டும்?";
-  if (q.includes("help")) return "I can greet you, tell the date and time, speak replies, and open a web search. My advanced AI brain is not connected yet.";
-  return "I am currently running in basic offline mode, so I do not know that answer yet. Use the Search button below to look it up, or we can connect a secure AI service in a later version.";
+
+function localReply(question) {
+  const q = question.toLowerCase().trim();
+
+  if (/^(hi|hello|hey|good morning|good evening)\b/.test(q)) {
+    return "Hello! JARVIS Version 6 is online. What would you like to know?";
+  }
+
+  if (q.includes("your name")) {
+    return "I am JARVIS, your personal assistant.";
+  }
+
+  if (q.includes("who made you")) {
+    return "I am a personal assistant project created by you.";
+  }
+
+  if (q.includes("time")) {
+    return "The time is " + new Date().toLocaleTimeString();
+  }
+
+  if (q.includes("date") || q.includes("today")) {
+    return "Today's date is " + new Date().toLocaleDateString();
+  }
+
+  if (q.includes("thank")) {
+    return "You're welcome! I'm ready to help.";
+  }
+
+  return null;
 }
-function sendMessage(text) {
-  const value = (text || "").trim();
-  if (!value) return;
-  addMessage("YOU", value);
+
+async function searchAnswer(question) {
+  const searchURL =
+    "https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=" +
+    encodeURIComponent(question) +
+    "&format=json&origin=*";
+
+  const searchResponse = await fetch(searchURL);
+  if (!searchResponse.ok) throw new Error("Search unavailable");
+
+  const searchData = await searchResponse.json();
+  const results = searchData.query.search;
+
+  if (!results || results.length === 0) {
+    return "I couldn't find a useful result. Try asking in a different way.";
+  }
+
+  const title = results[0].title;
+
+  const summaryURL =
+    "https://en.wikipedia.org/api/rest_v1/page/summary/" +
+    encodeURIComponent(title);
+
+  const summaryResponse = await fetch(summaryURL);
+  if (!summaryResponse.ok) throw new Error("Answer unavailable");
+
+  const summary = await summaryResponse.json();
+
+  if (summary.extract) {
+    return summary.extract + "\n\nSource: Wikipedia — " + title;
+  }
+
+  return "I found information about " + title +
+    ", but could not load its summary.";
+}
+
+async function sendMessage(text) {
+  const question = (text || "").trim();
+  if (!question) return;
+
+  addMessage("YOU", question);
   promptInput.value = "";
-  stateLabel.textContent = "PROCESSING";
-  const reply = localReply(value);
-  setTimeout(() => {
-    addMessage("JARVIS", reply);
-    speak(reply);
-    stateLabel.textContent = "READY WHEN YOU ARE";
-  }, 250);
+  stateLabel.textContent = "THINKING...";
+
+  const quickAnswer = localReply(question);
+
+  if (quickAnswer) {
+    addMessage("JARVIS", quickAnswer);
+    speak(quickAnswer);
+    stateLabel.textContent = "SYSTEM READY";
+    return;
+  }
+
+  try {
+    const answer = await searchAnswer(question);
+    addMessage("JARVIS", answer);
+    speak(answer);
+  } catch (error) {
+    const message =
+      "I couldn't connect to the information service. Please check your internet connection and try again.";
+    addMessage("JARVIS", message);
+    speak(message);
+  }
+
+  stateLabel.textContent = "SYSTEM READY";
 }
-document.getElementById("send").addEventListener("click", () => sendMessage(promptInput.value));
-promptInput.addEventListener("keydown", e => { if (e.key === "Enter") sendMessage(promptInput.value); });
+
+document.getElementById("send").addEventListener("click", () => {
+  sendMessage(promptInput.value);
+});
+
+promptInput.addEventListener("keydown", event => {
+  if (event.key === "Enter") {
+    sendMessage(promptInput.value);
+  }
+});
+
 voiceButton.addEventListener("click", () => {
   voiceOn = !voiceOn;
   voiceButton.textContent = voiceOn ? "🔊 Voice: ON" : "🔇 Voice: OFF";
-  if (!voiceOn && "speechSynthesis" in window) window.speechSynthesis.cancel();
+
+  if (!voiceOn && "speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
 });
+
 document.getElementById("clear").addEventListener("click", () => {
   chat.replaceChildren();
-  addMessage("JARVIS", "Chat cleared. I am ready.");
+  addMessage("JARVIS", "Chat cleared. JARVIS Version 6 is ready!");
 });
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+const SpeechRecognition =
+  window.SpeechRecognition || window.webkitSpeechRecognition;
+
 if (SpeechRecognition) {
   recognition = new SpeechRecognition();
   recognition.lang = "en-IN";
   recognition.interimResults = false;
-  recognition.onstart = () => { stateLabel.textContent = "LISTENING..."; micButton.textContent = "🔴 Listening"; };
-  recognition.onresult = e => sendMessage(e.results[0][0].transcript);
-  recognition.onerror = () => { stateLabel.textContent = "MIC ERROR — CHECK PERMISSION"; };
-  recognition.onend = () => { micButton.innerHTML = "🎙️ <span>Speak</span>"; if (stateLabel.textContent === "LISTENING...") stateLabel.textContent = "READY WHEN YOU ARE"; };
-} else {
-  micButton.title = "Speech recognition is not supported by this browser. Try Chrome.";
+
+  recognition.onstart = () => {
+    stateLabel.textContent = "LISTENING...";
+    micButton.textContent = "🔴 Listening...";
+  };
+
+  recognition.onresult = event => {
+    const spokenText = event.results[0][0].transcript;
+    sendMessage(spokenText);
+  };
+
+  recognition.onerror = () => {
+    stateLabel.textContent = "MIC ERROR";
+    micButton.textContent = "🎙️ Speak";
+  };
+
+  recognition.onend = () => {
+    micButton.textContent = "🎙️ Speak";
+    if (stateLabel.textContent === "LISTENING...") {
+      stateLabel.textContent = "SYSTEM READY";
+    }
+  };
 }
+
 micButton.addEventListener("click", () => {
   if (!recognition) {
-    addMessage("JARVIS", "Voice input is not supported in this browser. Please try Chrome and allow microphone permission.");
+    addMessage("JARVIS", "Voice input is not supported here. Please use Chrome.");
     return;
   }
-  try { recognition.start(); } catch (_) { stateLabel.textContent = "PLEASE WAIT"; }
+
+  try {
+    recognition.start();
+  } catch (error) {
+    stateLabel.textContent = "PLEASE WAIT";
+  }
 });
 
-// PWA service worker: works on HTTPS hosting or localhost.
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  });
 }
