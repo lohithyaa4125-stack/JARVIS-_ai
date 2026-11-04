@@ -1,168 +1,139 @@
-const chat = document.getElementById("chat");
-const promptInput = document.getElementById("prompt");
-const stateLabel = document.getElementById("state");
-const micButton = document.getElementById("mic");
-const voiceButton = document.getElementById("voice");
 
-let voiceOn = true;
+const chat = document.getElementById("chat");
+const promptBox = document.getElementById("prompt");
+const state = document.getElementById("state");
+const mic = document.getElementById("mic");
+const voice = document.getElementById("voice");
+const send = document.getElementById("send");
+const clear = document.getElementById("clear");
+
+let listening = false;
 let recognition = null;
 
-function addMessage(who, text) {
+function addMessage(sender, message) {
   const item = document.createElement("div");
-  item.className = "message " + (who === "YOU" ? "user" : "bot");
+  item.className = "message";
 
   const name = document.createElement("b");
-  name.textContent = who;
+  name.textContent = sender;
 
-  const body = document.createElement("p");
-  body.textContent = text;
+  const content = document.createElement("p");
+  content.textContent = message;
 
-  item.appendChild(name);
-  item.appendChild(body);
+  item.append(name, content);
   chat.appendChild(item);
   chat.scrollTop = chat.scrollHeight;
 }
 
-function speak(text) {
-  if (!voiceOn || !("speechSynthesis" in window)) return;
+function speak(message) {
+  if (!("speechSynthesis" in window)) return;
 
-  window.speechSynthesis.cancel();
+  speechSynthesis.cancel();
 
-  const utterance = new SpeechSynthesisUtterance(text);
+  const utterance = new SpeechSynthesisUtterance(message);
   utterance.lang = "en-IN";
+  utterance.pitch = 0.75;
   utterance.rate = 0.92;
-  utterance.pitch = 0.55;
 
-  const voices = window.speechSynthesis.getVoices();
-  const maleVoice = voices.find(v =>
+  const voices = speechSynthesis.getVoices();
+  const preferred = voices.find(v =>
     /male|david|daniel|alex|aaron|fred|guy/i.test(v.name)
   );
 
-  if (maleVoice) {
-    utterance.voice = maleVoice;
-  }
+  if (preferred) utterance.voice = preferred;
 
-  window.speechSynthesis.speak(utterance);
+  speechSynthesis.speak(utterance);
 }
 
-function localReply(question) {
+async function getAnswer(question) {
   const q = question.toLowerCase().trim();
 
-  if (/^(hi|hello|hey|good morning|good evening)\b/.test(q)) {
-    return "Hello! JARVIS Version 6 is online. What would you like to know?";
+  if (/^(hi|hello|hey)\b/.test(q)) {
+    return "Hello! JARVIS V10 systems are online. How can I help you?";
   }
 
   if (q.includes("your name")) {
-    return "I am JARVIS, your personal assistant.";
-  }
-
-  if (q.includes("who made you")) {
-    return "I am a personal assistant project created by you.";
+    return "I am JARVIS, your personal digital assistant.";
   }
 
   if (q.includes("time")) {
-    return "The time is " + new Date().toLocaleTimeString();
+    return "The current time is " +
+      new Date().toLocaleTimeString();
   }
 
   if (q.includes("date") || q.includes("today")) {
-    return "Today's date is " + new Date().toLocaleDateString();
+    return "Today's date is " +
+      new Date().toLocaleDateString();
+  }
+
+  if (q.includes("how are you")) {
+    return "All systems are operating normally.";
   }
 
   if (q.includes("thank")) {
-    return "You're welcome! I'm ready to help.";
+    return "You're welcome. Always ready to assist.";
   }
 
-  return null;
-}
-
-async function searchAnswer(question) {
-  const searchURL =
-    "https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=" +
-    encodeURIComponent(question) +
-    "&format=json&origin=*";
-
-  const searchResponse = await fetch(searchURL);
-  if (!searchResponse.ok) throw new Error("Search unavailable");
-
-  const searchData = await searchResponse.json();
-  const results = searchData.query.search;
-
-  if (!results || results.length === 0) {
-    return "I couldn't find a useful result. Try asking in a different way.";
-  }
-
-  const title = results[0].title;
-
-  const summaryURL =
-    "https://en.wikipedia.org/api/rest_v1/page/summary/" +
-    encodeURIComponent(title);
-
-  const summaryResponse = await fetch(summaryURL);
-  if (!summaryResponse.ok) throw new Error("Answer unavailable");
-
-  const summary = await summaryResponse.json();
-
-  if (summary.extract) {
-    return summary.extract + "\n\nSource: Wikipedia — " + title;
-  }
-
-  return "I found information about " + title +
-    ", but could not load its summary.";
-}
-
-async function sendMessage(text) {
-  const question = (text || "").trim();
-  if (!question) return;
-
-  addMessage("YOU", question);
-  promptInput.value = "";
-  stateLabel.textContent = "THINKING...";
-
-  const quickAnswer = localReply(question);
-
-  if (quickAnswer) {
-    addMessage("JARVIS", quickAnswer);
-    speak(quickAnswer);
-    stateLabel.textContent = "SYSTEM READY";
-    return;
+  if (q.includes("tamil")) {
+    return "I can try to help in Tamil. Please ask your question in Tamil.";
   }
 
   try {
-    const answer = await searchAnswer(question);
-    addMessage("JARVIS", answer);
-    speak(answer);
-  } catch (error) {
-    const message =
-      "I couldn't connect to the information service. Please check your internet connection and try again.";
-    addMessage("JARVIS", message);
-    speak(message);
-  }
+    state.textContent = "SEARCHING KNOWLEDGE...";
 
-  stateLabel.textContent = "SYSTEM READY";
+    const url =
+      "https://en.wikipedia.org/api/rest_v1/page/summary/" +
+      encodeURIComponent(question);
+
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      return "I couldn't find that answer. Please try another question.";
+    }
+
+    const data = await response.json();
+
+    if (data.extract) {
+      return data.extract;
+    }
+
+    return "I couldn't find a useful result for that question.";
+  } catch (error) {
+    return "Knowledge connection unavailable. Please check your internet.";
+  }
 }
 
-document.getElementById("send").addEventListener("click", () => {
-  sendMessage(promptInput.value);
+async function askJarvis() {
+  const question = promptBox.value.trim();
+
+  if (!question) return;
+
+  promptBox.value = "";
+  addMessage("YOU", question);
+
+  state.textContent = "PROCESSING...";
+
+  const answer = await getAnswer(question);
+
+  addMessage("JARVIS", answer);
+  speak(answer);
+
+  state.textContent = "SYSTEM ONLINE";
+}
+
+send.addEventListener("click", askJarvis);
+
+promptBox.addEventListener("keydown", event => {
+  if (event.key === "Enter") askJarvis();
 });
 
-promptInput.addEventListener("keydown", event => {
-  if (event.key === "Enter") {
-    sendMessage(promptInput.value);
-  }
+clear.addEventListener("click", () => {
+  chat.innerHTML = "";
+  state.textContent = "SYSTEM ONLINE";
 });
 
-voiceButton.addEventListener("click", () => {
-  voiceOn = !voiceOn;
-  voiceButton.textContent = voiceOn ? "🔊 Voice: ON" : "🔇 Voice: OFF";
-
-  if (!voiceOn && "speechSynthesis" in window) {
-    window.speechSynthesis.cancel();
-  }
-});
-
-document.getElementById("clear").addEventListener("click", () => {
-  chat.replaceChildren();
-  addMessage("JARVIS", "Chat cleared. JARVIS Version 6 is ready!");
+voice.addEventListener("click", () => {
+  speak("Hello. JARVIS voice system is online.");
 });
 
 const SpeechRecognition =
@@ -171,46 +142,44 @@ const SpeechRecognition =
 if (SpeechRecognition) {
   recognition = new SpeechRecognition();
   recognition.lang = "en-IN";
+  recognition.continuous = false;
   recognition.interimResults = false;
 
   recognition.onstart = () => {
-    stateLabel.textContent = "LISTENING...";
-    micButton.textContent = "🔴 Listening...";
+    listening = true;
+    state.textContent = "LISTENING...";
   };
 
   recognition.onresult = event => {
-    const spokenText = event.results[0][0].transcript;
-    sendMessage(spokenText);
+    promptBox.value = event.results[0][0].transcript;
+    askJarvis();
   };
 
   recognition.onerror = () => {
-    stateLabel.textContent = "MIC ERROR";
-    micButton.textContent = "🎙️ Speak";
+    state.textContent = "MICROPHONE ERROR";
   };
 
   recognition.onend = () => {
-    micButton.textContent = "🎙️ Speak";
-    if (stateLabel.textContent === "LISTENING...") {
-      stateLabel.textContent = "SYSTEM READY";
+    listening = false;
+    if (state.textContent === "LISTENING...") {
+      state.textContent = "SYSTEM ONLINE";
     }
   };
+
+  mic.addEventListener("click", () => {
+    if (!listening) recognition.start();
+  });
+} else {
+  mic.addEventListener("click", () => {
+    addMessage("JARVIS", "Voice recognition is not supported in this browser.");
+  });
 }
 
-micButton.addEventListener("click", () => {
-  if (!recognition) {
-    addMessage("JARVIS", "Voice input is not supported here. Please use Chrome.");
-    return;
-  }
-
-  try {
-    recognition.start();
-  } catch (error) {
-    stateLabel.textContent = "PLEASE WAIT";
-  }
-});
-
-if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("./sw.js").catch(() => {});
   });
 }
+
+addMessage("JARVIS", "JARVIS V10 initialized. All systems online.");
+  
