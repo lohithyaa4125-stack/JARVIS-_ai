@@ -7,8 +7,19 @@ const voice = document.getElementById("voice");
 const send = document.getElementById("send");
 const clear = document.getElementById("clear");
 
+let busy = false;
 let listening = false;
-let recognition = null;
+
+const history = [
+  {
+    role: "system",
+    content:
+      "You are JARVIS, a helpful and intelligent personal AI assistant. " +
+      "Answer naturally like a conversational AI. Understand English and Tamil. " +
+      "Give clear, friendly, accurate answers. Never claim to control a device " +
+      "or access information you do not actually have."
+  }
+];
 
 function addMessage(sender, message) {
   const item = document.createElement("div");
@@ -31,11 +42,14 @@ function speak(message) {
   speechSynthesis.cancel();
 
   const utterance = new SpeechSynthesisUtterance(message);
-  utterance.lang = "en-IN";
-  utterance.pitch = 0.75;
-  utterance.rate = 0.92;
+  const isTamil = /[\u0B80-\u0BFF]/.test(message);
+
+  utterance.lang = isTamil ? "ta-IN" : "en-IN";
+  utterance.pitch = 0.8;
+  utterance.rate = 0.95;
 
   const voices = speechSynthesis.getVoices();
+
   const preferred = voices.find(v =>
     /male|david|daniel|alex|aaron|fred|guy/i.test(v.name)
   );
@@ -45,102 +59,99 @@ function speak(message) {
   speechSynthesis.speak(utterance);
 }
 
-async function getAnswer(question) {
-  const q = question.toLowerCase().trim();
-
-  if (/^(hi|hello|hey)\b/.test(q)) {
-    return "Hello! JARVIS V10 systems are online. How can I help you?";
-  }
-
-  if (q.includes("your name")) {
-    return "I am JARVIS, your personal digital assistant.";
-  }
-
-  if (q.includes("time")) {
-    return "The current time is " +
-      new Date().toLocaleTimeString();
-  }
-
-  if (q.includes("date") || q.includes("today")) {
-    return "Today's date is " +
-      new Date().toLocaleDateString();
-  }
-
-  if (q.includes("how are you")) {
-    return "All systems are operating normally.";
-  }
-
-  if (q.includes("thank")) {
-    return "You're welcome. Always ready to assist.";
-  }
-
-  if (q.includes("tamil")) {
-    return "I can try to help in Tamil. Please ask your question in Tamil.";
-  }
-
-  try {
-    state.textContent = "SEARCHING KNOWLEDGE...";
-
-    const url =
-      "https://en.wikipedia.org/api/rest_v1/page/summary/" +
-      encodeURIComponent(question);
-
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      return "I couldn't find that answer. Please try another question.";
-    }
-
-    const data = await response.json();
-
-    if (data.extract) {
-      return data.extract;
-    }
-
-    return "I couldn't find a useful result for that question.";
-  } catch (error) {
-    return "Knowledge connection unavailable. Please check your internet.";
-  }
-}
-
 async function askJarvis() {
   const question = promptBox.value.trim();
 
-  if (!question) return;
+  if (!question || busy) return;
 
   promptBox.value = "";
   addMessage("YOU", question);
 
-  state.textContent = "PROCESSING...";
+  history.push({
+    role: "user",
+    content: question
+  });
 
-  const answer = await getAnswer(question);
+  busy = true;
+  send.disabled = true;
+  state.textContent = "JARVIS THINKING...";
 
-  addMessage("JARVIS", answer);
-  speak(answer);
+  try {
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        messages: history
+      })
+    });
 
-  state.textContent = "SYSTEM ONLINE";
+    if (!response.ok) {
+      throw new Error("AI server returned " + response.status);
+    }
+
+    const data = await response.json();
+    const answer = data.reply;
+
+    if (!answer || typeof answer !== "string") {
+      throw new Error("Invalid AI response");
+    }
+
+    history.push({
+      role: "assistant",
+      content: answer
+    });
+
+    addMessage("JARVIS", answer);
+    speak(answer);
+
+    state.textContent = "SYSTEM ONLINE";
+
+  } catch (error) {
+    console.error(error);
+
+    const message =
+      "My AI brain is not connected yet. Please check the secure AI server setup.";
+
+    addMessage("JARVIS", message);
+    state.textContent = "CONNECTION REQUIRED";
+
+    history.pop();
+
+  } finally {
+    busy = false;
+    send.disabled = false;
+  }
 }
 
 send.addEventListener("click", askJarvis);
 
 promptBox.addEventListener("keydown", event => {
-  if (event.key === "Enter") askJarvis();
+  if (event.key === "Enter") {
+    askJarvis();
+  }
 });
 
 clear.addEventListener("click", () => {
+  history.splice(1);
   chat.innerHTML = "";
+  speechSynthesis.cancel();
+  addMessage("JARVIS", "Conversation cleared. Ready for a new session.");
   state.textContent = "SYSTEM ONLINE";
 });
 
 voice.addEventListener("click", () => {
-  speak("Hello. JARVIS voice system is online.");
+  speak("Hello. JARVIS artificial intelligence system is ready.");
 });
 
 const SpeechRecognition =
-  window.SpeechRecognition || window.webkitSpeechRecognition;
+  window.SpeechRecognition ||
+  window.webkitSpeechRecognition;
 
 if (SpeechRecognition) {
-  recognition = new SpeechRecognition();
+  const recognition = new SpeechRecognition();
+
   recognition.lang = "en-IN";
   recognition.continuous = false;
   recognition.interimResults = false;
@@ -161,25 +172,31 @@ if (SpeechRecognition) {
 
   recognition.onend = () => {
     listening = false;
+
     if (state.textContent === "LISTENING...") {
       state.textContent = "SYSTEM ONLINE";
     }
   };
 
   mic.addEventListener("click", () => {
-    if (!listening) recognition.start();
+    if (!listening && !busy) {
+      recognition.start();
+    }
   });
+
 } else {
   mic.addEventListener("click", () => {
-    addMessage("JARVIS", "Voice recognition is not supported in this browser.");
+    addMessage("JARVIS", "Voice input is not supported by this browser.");
   });
 }
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => {});
+    navigator.serviceWorker.register("./sw.js").catch(console.error);
   });
 }
 
-addMessage("JARVIS", "JARVIS V10 initialized. All systems online.");
-  
+addMessage(
+  "JARVIS",
+  "V20 interface initialized. Waiting for AI brain connection."
+);
